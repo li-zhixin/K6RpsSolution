@@ -89,25 +89,43 @@ namespace K6RpsSolution
 
             var vusData = lines.Where(it =>
                     it["type"] == "Point" &&
-                    it["metric"] == "vus").ToList()
-                .OrderBy(it => ParseShortestXsdDateTime(it.Object("data")["time"])).ToList();
+                    it["metric"] == "vus").Select(it => 
+                    new Tuple<DateTime, int>(ParseShortestXsdDateTime(it.Object("data")["time"]),
+                    int.Parse(it.Object("data")["value"])))
+                .OrderBy(it => it.Item1).GroupBy(it => it.Item1.Floor(TimeSpan.FromMinutes(1)))
+                .Select(it=> new Tuple<DateTime, int>(it.Key.Floor(TimeSpan.FromMinutes(1)),it.Max(t=>t.Item2)))
+                .OrderBy(it=>it.Item1)
+                .ToList();
             var vusTrace = new Scatter()
             {
-                x = vusData.Select(it => ParseShortestXsdDateTime(it.Object("data")["time"])),
-                y = vusData.Select(it => int.Parse(it.Object("data")["value"])),
+                x = vusData.Select(it=>it.Item1),
+                y =vusData.Select(it=>it.Item2),
                 name = "virtual user count",
+                yaxis = "y2"
             };
             var checksData = lines.Where(it => it["type"] == "Point" &&
                                                it["metric"] == "checks").OrderBy(it =>
                 ParseShortestXsdDateTime(it.Object("data")["time"])).ToList();
-            ;
+
             var checkTrace = new Scatter()
             {
                 x = checksData.Select(it => ParseShortestXsdDateTime(it.Object("data")["time"])),
                 y = checksData.Select(it => int.Parse(it.Object("data")["value"]) * 100),
                 name = "check",
             };
-            var chart = Chart.Plot(new[] {vusTrace, rpsTrace, fitTrace});
+            var chart = Chart.WithLayout(new Layout.Layout()
+            {
+                yaxis = new Yaxis()
+                {
+                    title = "request/s"
+                },
+                yaxis2 = new Yaxis()
+                {
+                    title = "count",
+                    side = "right",
+                    overlaying = "y"
+                }
+            }, Chart.Plot(new[] {vusTrace, rpsTrace, fitTrace}));
             Chart.Show(chart);
         }
     }
