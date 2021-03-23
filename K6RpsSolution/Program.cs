@@ -16,92 +16,84 @@ namespace K6RpsSolution
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
-            var rpsTrace = GetTraceFromJson(args, out var fitTrace, out var vusTrace, out var startTime,
-                out var endTime);
-            var chart = Chart.WithLayout(new Layout.Layout()
-            {
-                yaxis2 = new Yaxis()
-                {
-                    title = "request/s",
-                    side = "right",
-                    overlaying = "y"
-                },
-                yaxis = new Yaxis()
-                {
-                    title = "count",
-                }
-            }, Chart.Plot(new[] {vusTrace, rpsTrace, fitTrace}));
-            Chart.Show(chart);
-            var startTimeStr = TimeHelper.ToRFC3339Time(startTime);
-            var endTimeStr = TimeHelper.ToRFC3339Time(endTime);
-            Console.WriteLine($"start time: {startTimeStr}");
-            Console.WriteLine($"end time: {endTimeStr}");
-            var cpuTrace = await GetCpuTrace(startTimeStr, endTimeStr);
-            var chart2 = Chart.WithLayout(new Layout.Layout()
-            {
-                yaxis = new Yaxis()
-                {
-                    title = "count"
-                },
-                yaxis2 = new Yaxis()
-                {
-                    title = "%",
-                    side = "right",
-                    overlaying = "y"
-                }
-            }, Chart.Plot(new[] {vusTrace, cpuTrace}));
-            Chart.Show(chart2);
+            var folder = @"D:\Bitbucket\forguncy-performancetest\report";
             
+            var rpsTrace = GetTraceFromJson("", out var fitTrace, out var vusTrace, out var startTime,
+                out var endTime, out var fitTime);
+            // var chart = Chart.WithLayout(new Layout.Layout()
+            // {
+            //     yaxis2 = new Yaxis()
+            //     {
+            //         title = "request/s",
+            //         side = "right",
+            //         overlaying = "y"
+            //     },
+            //     yaxis = new Yaxis()
+            //     {
+            //         title = "count",
+            //     }
+            // }, Chart.Plot(new[] {vusTrace, rpsTrace, fitTrace}));
+            // Chart.Show(chart);
             
-            var readTrace = await GetReadTrace(startTimeStr, endTimeStr);
-            var chart3 = Chart.WithLayout(new Layout.Layout()
-            {
-                yaxis = new Yaxis()
-                {
-                    title = "count"
-                },
-                yaxis2 = new Yaxis()
-                {
-                    title = "count/s",
-                    side = "right",
-                    overlaying = "y"
-                }
-            }, Chart.Plot(new[] {vusTrace, readTrace}));
-            Chart.Show(chart3);
-            
-            var lockTrace = await GetSqlLockTrace(startTimeStr, endTimeStr);
-            var chart4 = Chart.WithLayout(new Layout.Layout()
-            {
-                yaxis = new Yaxis()
-                {
-                    title = "count"
-                },
-                yaxis2 = new Yaxis()
-                {
-                    title = "count/s",
-                    side = "right",
-                    overlaying = "y"
-                }
-            }, Chart.Plot(new[] {vusTrace, lockTrace}));
-            Chart.Show(chart4);
+            // var startTimeStr = TimeHelper.ToRFC3339Time(startTime);
+            // var endTimeStr = TimeHelper.ToRFC3339Time(endTime);
+            // Console.WriteLine($"start time: {startTimeStr}");
+            // Console.WriteLine($"end time: {endTimeStr}");
+            // var cpuTrace = await GetCpuTrace(startTimeStr, endTimeStr);
+            // var chart2 = Chart.WithLayout(new Layout.Layout()
+            // {
+            //     yaxis = new Yaxis()
+            //     {
+            //         title = "count"
+            //     },
+            //     yaxis2 = new Yaxis()
+            //     {
+            //         title = "%",
+            //         side = "right",
+            //         overlaying = "y"
+            //     }
+            // }, Chart.Plot(new[] {vusTrace, cpuTrace}));
+            // Chart.Show(chart2);
+            //
+            //
+            // var readTrace = await GetReadTrace(startTimeStr, endTimeStr);
+            // var chart3 = Chart.WithLayout(new Layout.Layout()
+            // {
+            //     yaxis = new Yaxis()
+            //     {
+            //         title = "count"
+            //     },
+            //     yaxis2 = new Yaxis()
+            //     {
+            //         title = "count/s",
+            //         side = "right",
+            //         overlaying = "y"
+            //     }
+            // }, Chart.Plot(new[] {vusTrace, readTrace}));
+            // Chart.Show(chart3);
+            //
+            // var lockTrace = await GetSqlLockTrace(startTimeStr, endTimeStr);
+            // var chart4 = Chart.WithLayout(new Layout.Layout()
+            // {
+            //     yaxis = new Yaxis()
+            //     {
+            //         title = "count"
+            //     },
+            //     yaxis2 = new Yaxis()
+            //     {
+            //         title = "count/s",
+            //         side = "right",
+            //         overlaying = "y"
+            //     }
+            // }, Chart.Plot(new[] {vusTrace, lockTrace}));
+            // Chart.Show(chart4);
         }
 
-        private static Scatter GetTraceFromJson(string[] args, out Scatter fitTrace, out Scatter vusTrace,
-            out DateTime startTime, out DateTime endTime)
+        private static Scatter GetTraceFromJson(string filePath, out Scatter fitTrace, out Scatter vusTrace,
+            out DateTime startTime, out DateTime endTime, out DateTime fitTime)
         {
-            var filePath = "";
-            if (args.Length == 0)
-            {
-                var currentDic = Directory.GetCurrentDirectory();
-                filePath = Directory.GetFiles(currentDic, "*.json").OrderByDescending(File.GetLastWriteTime).First();
-            }
-            else
-            {
-                filePath = args[0];
-            }
-
             var lines = File.ReadLines(filePath).AsParallel().WithDegreeOfParallelism(Environment.ProcessorCount)
                 .Select(JsonObject.Parse).ToList();
             var pointsList = lines.Where(it =>
@@ -130,7 +122,7 @@ namespace K6RpsSolution
                 {
                     return;
                 }
-
+                
                 rpsList[endIndex] = rpsList[endIndex] + 1;
             });
             var rpsTraceDic = rpsList.GroupBy(it => it.Key / 60).ToDictionary(it => it.Key, it => it.Average(
@@ -165,6 +157,7 @@ namespace K6RpsSolution
                 break;
             }
 
+            fitTime = tempStartTime.AddMinutes(limitx);
             var (b, k) = Fit.Line(rpsTraceDic.Keys.Take(limitx).Select(x => (double) x).ToArray(),
                 rpsTraceDic.Values.Take(limitx).ToArray());
 
